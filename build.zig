@@ -5,6 +5,10 @@ pub fn build(b: *Builder) void {
     const exe = b.addExecutable("zigmandel", "src/main.zig");
     exe.setBuildMode(mode);
 
+    exe.addLibPath("/usr/lib64");
+    exe.linkSystemLibrary("c");
+    exe.linkSystemLibrary("webp");
+
     const run_cmd = exe.run();
 
     const run_step = b.step("run", "Run the app");
