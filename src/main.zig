@@ -32,9 +32,10 @@ fn mandel(cx : f64, cy : f64) f64 {
 }
 
 pub fn main() anyerror!void {
-    std.debug.warn("All your base are belong to us.\n");
-    const width : i64 = 2000;
-    const height : i64 = 2000;
+    warn("Zig Mandelbrot\n");
+
+    const width : i64 = 1600;
+    const height : i64 = 1200;
     
     var values = try allocator.alloc(f64, width * height);
     defer allocator.free(values);
@@ -45,8 +46,8 @@ pub fn main() anyerror!void {
 
     const cx : f64 = -0.5;
     const cy : f64 = 0;
-    const rx : f64 = 1;
-    const ry : f64 = 1;
+    const rx : f64 = 1.5;
+    const ry : f64 = 1.2;
 
     const stepx = rx / f64(width / 2);
     const stepy = ry / f64(height / 2);
@@ -73,25 +74,28 @@ pub fn main() anyerror!void {
 
     for (values) |v, n| {
         // warn("\n{} {}\n", v, n);
-        var value : f64 = v;
-        value *= 255;
-        if (value < 0)
-            value = 0;
-        if (value > 255.0)
-            value = 255.0;
+        var rval : f64 = -v;
+        rval *= 50;
+        if (rval < 0)
+            rval = 0;
+        if (rval > 255.0)
+            rval = 255.0;
+        var bval : f64 = v;
+        bval *= 30;
+        if (bval < 0)
+            bval = 0;
+        if (bval > 255.0)
+            bval = 255.0;
 
-        if (v > 1.0) {
-            @memset(image_data.ptr + n * 3, @floatToInt(u8, value), 3);
-        } else {
-            @memset(image_data.ptr + n * 3, @floatToInt(u8, value), 3);
-        }
+        @memset(image_data.ptr + n * 3, @floatToInt(u8, math.max(rval, bval)), 3);
+        // image_data[n * 3] = @floatToInt(u8, 255 - rval);
+        // image_data[n * 3 + 2] = @floatToInt(u8, 255 - bval);
+
     }
 
     var output_ptr : [*c]u8 = undefined;
-    warn("{}\n", output_ptr);
     const encode_len = c.WebPEncodeLosslessRGB(image_data.ptr, c_int(width), c_int(height), c_int(width * 3), &output_ptr);
-    warn("{}\n", output_ptr);
-    warn("encode len {}\n", encode_len);
+    warn("encode len: {} bytes\n", encode_len);
     defer c.WebPFree(output_ptr);
 
     const slice = output_ptr[0..encode_len];
