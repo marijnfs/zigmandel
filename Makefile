@@ -1,0 +1,3 @@
+all:
+	zig build run
+
