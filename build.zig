@@ -1,7 +1,9 @@
-const Builder = @import("std").build.Builder;
+const std = @import("std");
+const Builder = std.build.Builder;
 
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
+
     const exe = b.addExecutable("zigmandel", "src/main.zig");
     exe.setBuildMode(mode);
 
