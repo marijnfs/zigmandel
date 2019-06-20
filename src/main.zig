@@ -12,7 +12,7 @@ const c = @cImport({
 var da = std.heap.DirectAllocator.init();
 var allocator = &da.allocator;
 
-const ITERATIONS : i64 = 10;
+const ITERATIONS : i64 = 100;
 
 const Result = struct {
     val : f64,
@@ -28,10 +28,10 @@ fn mandel(cx : f64, cy : f64) Result {
     while (i < ITERATIONS) {
         const as = a * a;
         const bs = b * b;
-        // if (as + bs > 4.0)
-        //     return  Result{.val = as + bs,//math.log(f64, 2.0, as + bs) + @intToFloat(f64, ITERATIONS - i),
-        //         .x = a,
-        //         .y = b};
+        if (as + bs > 4.0)
+            return  Result{.val = as + bs,//math.log(f64, 2.0, as + bs) + @intToFloat(f64, ITERATIONS - i),
+                .x = a,
+                .y = b};
 
         b = 2.0 * a * b + cy;
         a = as - bs + cx;
@@ -43,9 +43,16 @@ fn mandel(cx : f64, cy : f64) Result {
 }
 
 fn clip(a : f64, mina : f64, maxa : f64) f64 {
+    if (a == std.math.inf(f64))
+        return maxa;
+    if (a == -std.math.inf(f64))
+        return mina;
+    if (a == std.math.nan(f64))
+        return maxa;
+    if (a == -std.math.nan(f64))
+        return mina;
     if (a > maxa)
         return maxa;
-
     if (a < mina)
         return mina;
     return a;
@@ -64,39 +71,68 @@ pub fn quickSort(comptime T: type, items: []T, lessThan: fn (lhs: T, rhs: T) boo
         }
         return;
     }
-    // if (items.len < 128) {
-    //     std.sort.insertionSort(T, items, lessThan);
+
+    // if (items.len < 8) {
+    //     std.sort.insertionSort(f64, items, lessThan);
     //     return;
     // }
 
-    var pivot : T = items[items.len / 2];
-    var cur = items.ptr;
-    var it  = items.ptr;
+    const a : T = items[0];
+    const b : T = items[items.len / 2];
+    const e : T = items[items.len - 1];
+    
+    const pivot = blk: {
+        if (a > b) {
+            if (a < e) {
+                break :blk a;
+            }
+            else if (b > e) {
+                break :blk b;
+            } else {
+                break :blk e;
+            }
+        } else {
+            if (a > e) {
+                break :blk a;
+            }
+            else if (b < e) {
+                break :blk b;
+            } else {
+                break :blk e;
+            }
+        }
+    };
+
+    var cur : [*]T = items.ptr;
+    var it : [*]T = items.ptr;
     var pivot_len : usize = 0;
 
-    for (items) |*v| {
-        if (lessThan(v.*, pivot)) {
-            if (cur == it)
+    for (items) |v| {
+        if (lessThan(v, pivot)) {
+            if (cur == it) {
+                it += 1;
                 continue;
+            }
             tmp = cur[0];
-            cur.* = it[0];
-            it.* = tmp;
+            cur[0] = it[0];
+            it[0] = tmp;
             cur += 1;
             pivot_len += 1;
         }
         it += 1;
     }
-    if (pivot_len > 0)
-        quickSort(T, items[0..pivot_len-1], lessThan);
-    if (pivot_len < items.len)
-        quickSort(T, items[pivot_len+1..], lessThan);
+    // warn("{} {}\n", pivot_len, items.len);
+    if (pivot_len == 0 or pivot_len == items.len)
+        return;
+    quickSort(T, items[0..pivot_len-1], lessThan);
+    quickSort(T, items[pivot_len..], lessThan);
 }
 
 pub fn main() anyerror!void {
     warn("Zig Mandelbrot\n");
 
-    const width : i64 = 2000;
-    const height : i64 = 2000;
+    const width : i64 = 4000;
+    const height : i64 = 4000;
     
     var values = try allocator.alloc(f64, width * height);
     var values_x = try allocator.alloc(f64, width * height);
@@ -141,26 +177,6 @@ pub fn main() anyerror!void {
     var image_data = try allocator.alloc(u8, 3 * width * height);
     defer allocator.free(image_data);
 
-    var rng = std.rand.DefaultPrng.init(0x12345678);
-    var bla = try allocator.alloc(f64, 4000000);
-    for (bla) |*v| {
-        v.* = @intToFloat(f64, rng.random.range(i64, -1000000, 1000000));
-    }
-
-    var nn : usize = 0;
-    while (true) {
-        bla[nn] = @intToFloat(f64, nn);
-        bla[nn*2+40000] = std.math.inf(f64);
-        bla[nn + 10000] = @intToFloat(f64, nn);
-        bla[50000 - nn] = @intToFloat(f64, nn);
-        bla[100000 - nn] = @intToFloat(f64, nn);
-        nn += 1;
-        if (nn > 25000)
-            break;
-    }
-
-    std.sort.sort(f64, bla, std.sort.asc(f64));
-
     var sorted_values = try allocator.alloc(f64, width * height);
     for (values) |v, n| 
     {
@@ -168,12 +184,20 @@ pub fn main() anyerror!void {
     }
 
     warn("sorting {}\n", sorted_values.len);
+    // std.sort.sort(f64, sorted_values, std.sort.asc(f64));
+    // std.sort.sort(f64, values, std.sort.asc(f64));
     // std.sort.insertionSort(f64, values_x, std.sort.asc(f64));
     // std.sort.insertionSort(f64, values_y, std.sort.asc(f64));
     // std.sort.insertionSort(f64, values, std.sort.asc(f64));
+
+    const start_time = std.time.milliTimestamp();
+
+    // @newStackCall(somestack, quickSort, f64, values, std.sort.asc(f64));
     quickSort(f64, values, std.sort.asc(f64));
-    warn("done\n");
-    // std.sort.sort(f64, sorted_values, std.sort.asc(f64));
+    // std.sort.sort(f64, values, std.sort.asc(f64));
+    warn("done in {}\n", std.time.milliTimestamp() - start_time);
+
+    // std.sort.sort(f64, values, std.sort.asc(f64));
     
     for (values) |v, n| {
         // warn("\n{} {}\n", v, n);
@@ -199,25 +223,15 @@ pub fn main() anyerror!void {
         r = low_bound + (r * (up_bound - low_bound));
         g = low_bound + (g * (up_bound - low_bound));
         b = low_bound + (b * (up_bound - low_bound));
-        
-        //warn("{}\n", r);
-        // if (v > 1) {
-        //     @memset(image_data.ptr + n * 3, 0, 3);
-        // }
-        // else {
-        //     @memset(image_data.ptr + n * 3, 200, 3);
-        // }
-        //warn("{} {}\n", norm, vx);
-        // continue;
-        //warn("{}", low_bound);
+
         image_data[n * 3]     = @floatToInt(u8, r * 255);
         image_data[n * 3 + 1] = @floatToInt(u8, g * 255);
         image_data[n * 3 + 2] = @floatToInt(u8, b * 255);
     }
 
-    warn("before");
-    quickSort(u8, image_data[0..], std.sort.asc(u8));
-    warn("after");
+    // warn("before");
+    // quickSort(u8, image_data[0..], std.sort.asc(u8));
+    // warn("after");
     var output_ptr : [*c]u8 = undefined;
 
 
