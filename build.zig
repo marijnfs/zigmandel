@@ -4,7 +4,7 @@ const Builder = std.build.Builder;
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
 
-    const exe = b.addExecutable("zigmandel", "src/main.zig");
+    const exe = b.addExecutable("zigmandel", "src/mandel.zig");
     exe.setBuildMode(mode);
 
     exe.addLibPath("/usr/lib64");
