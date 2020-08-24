@@ -10,7 +10,7 @@ const c = @cImport({
     @cInclude("webp/decode.h"); 
 });
 
-var allocator = std.heap.direct_allocator;
+var allocator = std.heap.page_allocator;
 
 const ITERATIONS : i64 = 800;
 
@@ -250,12 +250,12 @@ pub fn main() anyerror!void {
     }
 
     const compare = struct {
-        fn inner(v1: ValueIndex, v2: ValueIndex) bool {
+        fn inner(dummy: void, v1: ValueIndex, v2: ValueIndex) bool {
             return v1.val < v2.val;
         }
     };
 
-    std.sort.sort(ValueIndex, ivalues, compare.inner);
+    std.sort.sort(ValueIndex, ivalues, {}, compare.inner);
     // quickSort(ValueIndex, ivalues, compare.inner);
 
     // quickSort(f64, values, std.sort.asc(f64));
@@ -314,5 +314,6 @@ pub fn main() anyerror!void {
     defer c.WebPFree(output_ptr);
 
     const slice = output_ptr[0..encode_len];
-    try std.io.writeFile("test.webp", slice);
+    var file = try std.fs.cwd().createFile("test.webp", std.fs.File.CreateFlags{});
+    try file.writeAll(slice);
 }
