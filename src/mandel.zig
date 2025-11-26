@@ -1,8 +1,6 @@
 const std = @import("std");
 const sort = std.sort.sort;
 const math = std.math;
-const min = std.math.min;
-const max = std.math.max;
 
 const c = @cImport({
     @cInclude("webp/encode.h");
@@ -32,7 +30,7 @@ fn mandel(cx: f64, cy: f64) Result {
         const as = a * a;
         const bs = b * b;
         if (as + bs > 4.0)
-            return Result{ .val = math.sqrt(as + bs) + @intToFloat(f64, ITERATIONS - i), .x = a, .y = b };
+            return Result{ .val = math.sqrt(as + bs) + @as(f32, @floatFromInt(ITERATIONS - i)), .x = a, .y = b };
 
         b = 2.0 * a * b + cy;
         a = as - bs + cx;
@@ -168,7 +166,7 @@ pub fn main() anyerror!void {
     const cx: f64 = -0.664092;
     const cy: f64 = -0.327654;
     const rx: f64 = 0.0000329;
-    const ry: f64 = rx * (@intToFloat(f64, height) / @intToFloat(f64, width));
+    const ry: f64 = rx * (@as(f32, @floatFromInt(height)) / @as(f32, @floatFromInt(width)));
 
     //spiral
     //const basephase = math.pi * 0.0;
@@ -177,19 +175,19 @@ pub fn main() anyerror!void {
     //const rx : f64 = 0.0102;
     //const ry : f64 = rx * (@intToFloat(f64, height) / @intToFloat(f64, width));
 
-    const stepx = rx / @intToFloat(f64, width / 2);
-    const stepy = ry / @intToFloat(f64, height / 2);
+    const stepx = rx / @as(f64, @floatFromInt(width / 2));
+    const stepy = ry / @as(f64, @floatFromInt(height / 2));
     const alias_stepx = stepx / 4.0;
     const alias_stepy = stepx / 4.0;
 
     var i: usize = 0;
     var y: i64 = -height / 2;
     while (y < height / 2) {
-        var fy = cy + @intToFloat(f64, y) * stepy;
+        const fy = cy + @as(f64, @floatFromInt(y)) * stepy;
 
         var x: i64 = -width / 2;
         while (x < width / 2) {
-            var fx = cx + @intToFloat(f64, x) * stepx;
+            const fx = cx + @as(f64, @floatFromInt(x)) * stepx;
 
             var response = Result.init();
             const r1 = mandel(fx + alias_stepx, fy + alias_stepy);
@@ -211,7 +209,7 @@ pub fn main() anyerror!void {
     defer allocator.free(image_data);
 
     var sorted_values = try allocator.alloc(f64, width * height);
-    for (values) |v, n| {
+    for (0.., values) |n, v| {
         sorted_values[n] = v;
     }
 
@@ -224,7 +222,7 @@ pub fn main() anyerror!void {
     };
     var ivalues = try allocator.alloc(ValueIndex, values.len);
 
-    for (values) |v, n| {
+    for (0.., values) |n, v| {
         ivalues[n].n = n;
         ivalues[n].val = v;
     }
@@ -235,14 +233,14 @@ pub fn main() anyerror!void {
         }
     };
 
-    std.sort.sort(ValueIndex, ivalues, {}, compare.inner);
+    std.sort.insertion(ValueIndex, ivalues, {}, compare.inner);
     // quickSort(ValueIndex, ivalues, compare.inner);
 
     // quickSort(f64, values, std.sort.asc(f64));
     std.log.info("done in {}\n", .{std.time.milliTimestamp() - start_time});
 
-    for (ivalues) |v, n| {
-        const rel = @intToFloat(f64, n) / @intToFloat(f64, ivalues.len);
+    for (0.., ivalues) |n, v| {
+        const rel = @as(f64, @floatFromInt(n)) / @as(f64, @floatFromInt(ivalues.len));
         // const r_phase = (math.sin(math.pi * 2.0 * rel) + 1.0) / 2.0;
         // const g_phase = (math.sin(math.pi * 2.0 * rel) + 1.0) / 2.0;
         // const b_phase = (math.sin(math.pi * 2.0 * rel) + 1.0) / 2.0;
@@ -269,18 +267,18 @@ pub fn main() anyerror!void {
             const g_phase: f64 = 0.0; //0.0 + 0.0  * phase1 + 0.0 * phase2;
             const b_phase: f64 = 0.0; //0.0 + 0.20 * phase2 + 0.8 * phase2;
 
-            image_data[v.n * 3] = @floatToInt(u8, r_phase * 255);
-            image_data[v.n * 3 + 1] = @floatToInt(u8, g_phase * 255);
-            image_data[v.n * 3 + 2] = @floatToInt(u8, b_phase * 255);
+            image_data[v.n * 3] = @as(u8, @intFromFloat(r_phase * 255));
+            image_data[v.n * 3 + 1] = @as(u8, @intFromFloat(g_phase * 255));
+            image_data[v.n * 3 + 2] = @as(u8, @intFromFloat(b_phase * 255));
         } else {
-            const r_phase: f64 = max(0.0, min(1.0, 0.1 + 0.3 * phase1 + 0.1 * phase2));
+            const r_phase: f64 = @max(0.0, @min(1.0, 0.1 + 0.3 * phase1 + 0.1 * phase2));
             //const g_phase = 0.31 + 0.3  * phase1 - 0.1543 * phase2;
-            const g_phase: f64 = max(0.0, min(1.0, 0.1 + 0.2 * phase1 - 0.1543 * phase2));
-            const b_phase: f64 = max(0.0, min(1.0, 0.32 + 0.0 * phase2 + 0.6 * phase2));
+            const g_phase: f64 = @max(0.0, @min(1.0, 0.1 + 0.2 * phase1 - 0.1543 * phase2));
+            const b_phase: f64 = @max(0.0, @min(1.0, 0.32 + 0.0 * phase2 + 0.6 * phase2));
 
-            image_data[v.n * 3] = @floatToInt(u8, r_phase * 255);
-            image_data[v.n * 3 + 1] = @floatToInt(u8, g_phase * 255);
-            image_data[v.n * 3 + 2] = @floatToInt(u8, b_phase * 255);
+            image_data[v.n * 3] = @as(u8, @intFromFloat(r_phase * 255));
+            image_data[v.n * 3 + 1] = @as(u8, @intFromFloat(g_phase * 255));
+            image_data[v.n * 3 + 2] = @as(u8, @intFromFloat(b_phase * 255));
         }
     }
 
