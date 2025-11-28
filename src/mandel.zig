@@ -1,6 +1,7 @@
 const std = @import("std");
 const sort = std.sort.sort;
 const math = std.math;
+const complex = std.math.complex;
 
 const c = @cImport({
     @cInclude("webp/encode.h");
@@ -9,7 +10,7 @@ const c = @cImport({
 
 var allocator = std.heap.page_allocator;
 
-const ITERATIONS: i64 = 800;
+const ITERATIONS: i64 = 1000;
 
 const Result = struct {
     val: f64,
@@ -20,6 +21,28 @@ const Result = struct {
         return Result{ .val = 0, .x = 0, .y = 0 };
     }
 };
+
+const C64 = complex.Complex(f64);
+
+fn zeta(cx: f64, cy: f64) Result {
+    // std.log.info("{} {}", .{cx, cy});
+
+    var sum = C64{ .re = 0, .im = 0 };
+    // Correctly define s = cx + i*cy (not -cx - i*cy)
+    const s = C64{ .re = cx, .im = cy };
+
+    // Compute n^{-s} = exp(-s * ln(n))
+    for (0..ITERATIONS) |n| { // Start at n=1 (not 0) to avoid undefined terms
+        // for (1..1001) |n| {  // Start at n=1 (not 0) to avoid undefined terms
+        const n_complex = C64{ .re = @floatFromInt(n), .im = 0 };
+        const term = complex.pow(n_complex, s.neg());
+        sum = sum.add(term);
+    }
+
+    // Return actual zeta value (not s.re) and correct coordinates
+
+    return Result{ .val = sum.re, .x = cx, .y = cy };
+}
 
 fn mandel(cx: f64, cy: f64) Result {
     var a: f64 = 0;
@@ -126,12 +149,10 @@ pub fn quickSort(comptime T: type, items: []T, lessThan: fn (lhs: T, rhs: T) boo
 pub fn main() anyerror!void {
     std.log.info("Zig Mandelbrot\n", .{});
 
-    const width: i64 = 4000;
-    const height: i64 = 3000;
+    const width: i64 = 5000;
+    const height: i64 = 5000;
 
-    var values = try allocator.alloc(f64, width * height);
-    var values_x = try allocator.alloc(f64, width * height);
-    var values_y = try allocator.alloc(f64, width * height);
+    const values = try allocator.alloc(f64, width * height);
     defer allocator.free(values);
 
     for (values) |*v|
@@ -163,10 +184,15 @@ pub fn main() anyerror!void {
     //seahorse
 
     const basephase = math.pi * 1.9;
-    const cx: f64 = -0.664092;
-    const cy: f64 = -0.327654;
-    const rx: f64 = 0.0000329;
-    const ry: f64 = rx * (@as(f32, @floatFromInt(height)) / @as(f32, @floatFromInt(width)));
+    //const cx: f64 = -0.664092;
+    //const cy: f64 = -0.327654;
+    //const rx: f64 = 0.0000329;
+    //const ry: f64 = rx * (@as(f32, @floatFromInt(height)) / @as(f32, @floatFromInt(width)));
+
+    const cx: f64 = -3.0;
+    const cy: f64 = -3.0;
+    const rx: f64 = 6.0;
+    const ry: f64 = 6.0;
 
     //spiral
     //const basephase = math.pi * 0.0;
@@ -175,36 +201,94 @@ pub fn main() anyerror!void {
     //const rx : f64 = 0.0102;
     //const ry : f64 = rx * (@intToFloat(f64, height) / @intToFloat(f64, width));
 
-    const stepx = rx / @as(f64, @floatFromInt(width / 2));
-    const stepy = ry / @as(f64, @floatFromInt(height / 2));
-    const alias_stepx = stepx / 4.0;
-    const alias_stepy = stepx / 4.0;
+    const dx = rx / @as(f64, @floatFromInt(width));
+    const dy = ry / @as(f64, @floatFromInt(height));
 
-    var i: usize = 0;
-    var y: i64 = -height / 2;
-    while (y < height / 2) {
-        const fy = cy + @as(f64, @floatFromInt(y)) * stepy;
+    // Function for threads
 
-        var x: i64 = -width / 2;
-        while (x < width / 2) {
-            const fx = cx + @as(f64, @floatFromInt(x)) * stepx;
+    const F = struct {
+        width_: usize,
+        cx_: f64,
+        cy_: f64,
+        dx_: f64,
+        dy_: f64,
+        fy_: f64,
+        i_: usize,
 
-            var response = Result.init();
-            const r1 = mandel(fx + alias_stepx, fy + alias_stepy);
-            const r2 = mandel(fx + alias_stepx, fy - alias_stepy);
-            const r3 = mandel(fx - alias_stepx, fy + alias_stepy);
-            const r4 = mandel(fx - alias_stepx, fy - alias_stepy);
-            response.val = r1.val + r2.val + r3.val + r4.val;
+        fn f(self: *@This(), values_: []f64) void {
+            const alias_dx = self.dx_ / 4.0;
+            const alias_dy = self.dx_ / 4.0;
 
-            values[i] = response.val;
-            values_x[i] = response.x;
-            values_y[i] = response.y;
-            x += 1;
-            i += 1;
+            var x: usize = 0;
+            while (x < self.width_) {
+                const fx = self.cx_ + @as(f64, @floatFromInt(x)) * self.dx_;
+
+                var response = Result.init();
+
+                //const f = mandel;
+                const eval = zeta;
+                const r1 = eval(fx + alias_dx, self.fy_ + alias_dy);
+                const r2 = eval(fx + alias_dx, self.fy_ - alias_dy);
+                const r3 = eval(fx - alias_dx, self.fy_ + alias_dy);
+                const r4 = eval(fx - alias_dx, self.fy_ - alias_dy);
+                response.val = r1.val + r2.val + r3.val + r4.val;
+
+                values_[self.i_] = response.val;
+                x += 1;
+                self.i_ += 1;
+            }
         }
-        y += 1;
-    }
+    };
 
+    {
+
+        // Thread pool
+
+        var pool: std.Thread.Pool = undefined;
+        try pool.init(.{
+            .allocator = allocator,
+        });
+        defer pool.deinit();
+
+        var i: usize = 0;
+        var y: i64 = 0;
+
+        while (y < height) {
+            const fy = cy + @as(f64, @floatFromInt(y)) * dy;
+            const f = try allocator.create(F);
+            f.* = .{
+                .width_ = width,
+                .cx_ = cx,
+                .cy_ = cy,
+                .dx_ = dx,
+                .dy_ = dy,
+                .fy_ = fy,
+                .i_ = i,
+            };
+            i += width;
+            try pool.spawn(F.f, .{ f, values });
+
+            // var x: i64 = -width / 2;
+            // while (x < width / 2) {
+            //     const fx = cx + @as(f64, @floatFromInt(x)) * dx;
+
+            //     var response = Result.init();
+
+            //     //const f = mandel;
+            //     const f = zeta;
+            //     const r1 = f(fx + alias_dx, fy + alias_dy);
+            //     const r2 = f(fx + alias_dx, fy - alias_dy);
+            //     const r3 = f(fx - alias_dx, fy + alias_dy);
+            //     const r4 = f(fx - alias_dx, fy - alias_dy);
+            //     response.val = r1.val + r2.val + r3.val + r4.val;
+
+            //     values[i] = response.val;
+            //     x += 1;
+            //     i += 1;
+            // }
+            y += 1;
+        }
+    }
     var image_data = try allocator.alloc(u8, 3 * width * height);
     defer allocator.free(image_data);
 
@@ -233,7 +317,7 @@ pub fn main() anyerror!void {
         }
     };
 
-    std.sort.insertion(ValueIndex, ivalues, {}, compare.inner);
+    std.sort.heap(ValueIndex, ivalues, {}, compare.inner);
     // quickSort(ValueIndex, ivalues, compare.inner);
 
     // quickSort(f64, values, std.sort.asc(f64));
@@ -247,39 +331,23 @@ pub fn main() anyerror!void {
         // const r_phase = (math.sin(math.pi * 2.0 * rel) + 1.0) / 2.0;
         // const g_phase = (math.sin(math.pi * 2.0 * rel + math.pi * 2.0 / 3.0) + 1.0) / 2.0;
         // const b_phase = (math.sin(math.pi * 2.0 * rel + math.pi * 4.0 / 3.0) + 1.0) / 2.0;
-        const within = v.val < 1.0;
+        // const within = v.val < 1.0;
 
-        const diff: f64 = blk: {
-            if (within) {
-                break :blk @as(f64, 0.0) + basephase;
-            } else {
-                break :blk math.pi + basephase;
-            }
-        };
+        const diff = math.pi + basephase;
 
         const phase1 = (math.sin(math.pi * 10.0 * rel + diff) + 1.0) / 2.0;
         const phase2 = (math.sin(math.pi * 3.33 * rel + diff + math.pi / 2.0) + 1.0) / 2.0;
 
         // std.log.info("{} {} {}\n", r_phase, g_phase, b_phase);
 
-        if (within) {
-            const r_phase: f64 = 0.0; //0.1 + 0.80 * phase1 + 0.3 * phase2;
-            const g_phase: f64 = 0.0; //0.0 + 0.0  * phase1 + 0.0 * phase2;
-            const b_phase: f64 = 0.0; //0.0 + 0.20 * phase2 + 0.8 * phase2;
+        const r_phase: f64 = @max(0.0, @min(1.0, 0.1 + 0.3 * phase1 + 0.1 * phase2));
+        //const g_phase = 0.31 + 0.3  * phase1 - 0.1543 * phase2;
+        const g_phase: f64 = @max(0.0, @min(1.0, 0.1 + 0.2 * phase1 - 0.1543 * phase2));
+        const b_phase: f64 = @max(0.0, @min(1.0, 0.32 + 0.0 * phase2 + 0.6 * phase2));
 
-            image_data[v.n * 3] = @as(u8, @intFromFloat(r_phase * 255));
-            image_data[v.n * 3 + 1] = @as(u8, @intFromFloat(g_phase * 255));
-            image_data[v.n * 3 + 2] = @as(u8, @intFromFloat(b_phase * 255));
-        } else {
-            const r_phase: f64 = @max(0.0, @min(1.0, 0.1 + 0.3 * phase1 + 0.1 * phase2));
-            //const g_phase = 0.31 + 0.3  * phase1 - 0.1543 * phase2;
-            const g_phase: f64 = @max(0.0, @min(1.0, 0.1 + 0.2 * phase1 - 0.1543 * phase2));
-            const b_phase: f64 = @max(0.0, @min(1.0, 0.32 + 0.0 * phase2 + 0.6 * phase2));
-
-            image_data[v.n * 3] = @as(u8, @intFromFloat(r_phase * 255));
-            image_data[v.n * 3 + 1] = @as(u8, @intFromFloat(g_phase * 255));
-            image_data[v.n * 3 + 2] = @as(u8, @intFromFloat(b_phase * 255));
-        }
+        image_data[v.n * 3] = @as(u8, @intFromFloat(r_phase * 255));
+        image_data[v.n * 3 + 1] = @as(u8, @intFromFloat(g_phase * 255));
+        image_data[v.n * 3 + 2] = @as(u8, @intFromFloat(b_phase * 255));
     }
 
     var output_ptr: [*c]u8 = undefined;
