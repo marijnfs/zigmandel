@@ -10,7 +10,7 @@ const c = @cImport({
 
 var allocator = std.heap.page_allocator;
 
-const ITERATIONS: i64 = 1000;
+const ITERATIONS: i64 = 200;
 
 const Result = struct {
     val: f64,
@@ -25,23 +25,19 @@ const Result = struct {
 const C64 = complex.Complex(f64);
 
 fn zeta(cx: f64, cy: f64) Result {
-    // std.log.info("{} {}", .{cx, cy});
-
     var sum = C64{ .re = 0, .im = 0 };
-    // Correctly define s = cx + i*cy (not -cx - i*cy)
     const s = C64{ .re = cx, .im = cy };
 
-    // Compute n^{-s} = exp(-s * ln(n))
-    for (0..ITERATIONS) |n| { // Start at n=1 (not 0) to avoid undefined terms
-        // for (1..1001) |n| {  // Start at n=1 (not 0) to avoid undefined terms
+    for (1..ITERATIONS) |n| { // Start at n=1 (not 0) to avoid undefined terms
         const n_complex = C64{ .re = @floatFromInt(n), .im = 0 };
+        // std.log.info("it {} n_:     {} sneg: {} pow: {} ", .{n, n_complex, s.neg(), complex.pow(n_complex, s.neg())});
         const term = complex.pow(n_complex, s.neg());
         sum = sum.add(term);
     }
 
     // Return actual zeta value (not s.re) and correct coordinates
 
-    return Result{ .val = sum.re, .x = cx, .y = cy };
+    return Result{ .val = sum.im, .x = cx, .y = cy };
 }
 
 fn mandel(cx: f64, cy: f64) Result {
@@ -49,11 +45,12 @@ fn mandel(cx: f64, cy: f64) Result {
     var b: f64 = 0;
 
     var i: i64 = 0;
-    while (i < ITERATIONS) {
+    const bla = 1000;
+    while (i < bla) {
         const as = a * a;
         const bs = b * b;
         if (as + bs > 4.0)
-            return Result{ .val = math.sqrt(as + bs) + @as(f32, @floatFromInt(ITERATIONS - i)), .x = a, .y = b };
+            return Result{ .val = math.sqrt(as + bs) + @as(f32, @floatFromInt(bla - i)), .x = a, .y = b };
 
         b = 2.0 * a * b + cy;
         a = as - bs + cx;
@@ -149,8 +146,8 @@ pub fn quickSort(comptime T: type, items: []T, lessThan: fn (lhs: T, rhs: T) boo
 pub fn main() anyerror!void {
     std.log.info("Zig Mandelbrot\n", .{});
 
-    const width: i64 = 5000;
-    const height: i64 = 5000;
+    const width: usize = 1000;
+    const height: usize = 1000;
 
     const values = try allocator.alloc(f64, width * height);
     defer allocator.free(values);
@@ -189,10 +186,10 @@ pub fn main() anyerror!void {
     //const rx: f64 = 0.0000329;
     //const ry: f64 = rx * (@as(f32, @floatFromInt(height)) / @as(f32, @floatFromInt(width)));
 
-    const cx: f64 = -3.0;
-    const cy: f64 = -3.0;
-    const rx: f64 = 6.0;
-    const ry: f64 = 6.0;
+    const cx: f64 = -2.0;
+    const cy: f64 = -2.0;
+    const rx: f64 = 4.0;
+    const ry: f64 = 4.0;
 
     //spiral
     //const basephase = math.pi * 0.0;
@@ -216,24 +213,27 @@ pub fn main() anyerror!void {
         i_: usize,
 
         fn f(self: *@This(), values_: []f64) void {
-            const alias_dx = self.dx_ / 4.0;
-            const alias_dy = self.dx_ / 4.0;
+            // const alias_dx = self.dx_ / 4.0;
+            // const alias_dy = self.dy_ / 4.0;
 
             var x: usize = 0;
             while (x < self.width_) {
                 const fx = self.cx_ + @as(f64, @floatFromInt(x)) * self.dx_;
 
-                var response = Result.init();
-
+                // var response = Result.init();
+                // values_[self.i_] = self.fy_;
                 //const f = mandel;
                 const eval = zeta;
-                const r1 = eval(fx + alias_dx, self.fy_ + alias_dy);
-                const r2 = eval(fx + alias_dx, self.fy_ - alias_dy);
-                const r3 = eval(fx - alias_dx, self.fy_ + alias_dy);
-                const r4 = eval(fx - alias_dx, self.fy_ - alias_dy);
-                response.val = r1.val + r2.val + r3.val + r4.val;
+                values_[self.i_] = eval(fx, self.fy_).val;
+                //std.log.info("{} {} {}", .{fx, self.fy_, eval(fx, self.fy_).val}); 
+                
+                // const r1 = eval(fx + alias_dx, self.fy_ + alias_dy);
+                // const r2 = eval(fx + alias_dx, self.fy_ - alias_dy);
+                // const r3 = eval(fx - alias_dx, self.fy_ + alias_dy);
+                // const r4 = eval(fx - alias_dx, self.fy_ - alias_dy);
+                // response.val = r1.val + r2.val + r3.val + r4.val;
 
-                values_[self.i_] = response.val;
+                // values_[self.i_] = response.val;
                 x += 1;
                 self.i_ += 1;
             }
@@ -255,6 +255,7 @@ pub fn main() anyerror!void {
 
         while (y < height) {
             const fy = cy + @as(f64, @floatFromInt(y)) * dy;
+
             const f = try allocator.create(F);
             f.* = .{
                 .width_ = width,
@@ -265,8 +266,10 @@ pub fn main() anyerror!void {
                 .fy_ = fy,
                 .i_ = i,
             };
-            i += width;
             try pool.spawn(F.f, .{ f, values });
+
+            i += width;
+            y += 1;
 
             // var x: i64 = -width / 2;
             // while (x < width / 2) {
@@ -286,7 +289,6 @@ pub fn main() anyerror!void {
             //     x += 1;
             //     i += 1;
             // }
-            y += 1;
         }
     }
     var image_data = try allocator.alloc(u8, 3 * width * height);
@@ -313,11 +315,22 @@ pub fn main() anyerror!void {
 
     const compare = struct {
         fn inner(_: void, v1: ValueIndex, v2: ValueIndex) bool {
+            if (std.math.isNan(v1.val) or std.math.isInf(v1.val))
+            {
+                if (std.math.isNan(v2.val) or std.math.isInf(v2.val))
+                    return true;
+                return false;
+            }
+
             return v1.val < v2.val;
         }
     };
 
     std.sort.heap(ValueIndex, ivalues, {}, compare.inner);
+    // for (ivalues) |iv| {
+    //     std.log.info("{}", .{iv.val});
+    // }
+
     // quickSort(ValueIndex, ivalues, compare.inner);
 
     // quickSort(f64, values, std.sort.asc(f64));
