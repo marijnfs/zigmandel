@@ -10,7 +10,7 @@ const c = @cImport({
 
 var allocator = std.heap.page_allocator;
 
-const ITERATIONS: i64 = 200;
+const ITERATIONS: i64 = 800;
 
 const Result = struct {
     val: f64,
@@ -37,7 +37,7 @@ fn zeta(cx: f64, cy: f64) Result {
 
     // Return actual zeta value (not s.re) and correct coordinates
 
-    return Result{ .val = sum.im, .x = cx, .y = cy };
+    return Result{ .val = sum.magnitude(), .x = cx, .y = cy };
 }
 
 fn mandel(cx: f64, cy: f64) Result {
@@ -186,10 +186,10 @@ pub fn main() anyerror!void {
     //const rx: f64 = 0.0000329;
     //const ry: f64 = rx * (@as(f32, @floatFromInt(height)) / @as(f32, @floatFromInt(width)));
 
-    const cx: f64 = -2.0;
-    const cy: f64 = -2.0;
-    const rx: f64 = 4.0;
-    const ry: f64 = 4.0;
+    const cx: f64 = -1.0;
+    const cy: f64 = -200.0;
+    const rx: f64 = 3.0;
+    const ry: f64 = 400.0;
 
     //spiral
     //const basephase = math.pi * 0.0;
@@ -213,8 +213,8 @@ pub fn main() anyerror!void {
         i_: usize,
 
         fn f(self: *@This(), values_: []f64) void {
-            // const alias_dx = self.dx_ / 4.0;
-            // const alias_dy = self.dy_ / 4.0;
+            const alias_dx = self.dx_ / 4.0;
+            const alias_dy = self.dy_ / 4.0;
 
             var x: usize = 0;
             while (x < self.width_) {
@@ -224,16 +224,16 @@ pub fn main() anyerror!void {
                 // values_[self.i_] = self.fy_;
                 //const f = mandel;
                 const eval = zeta;
-                values_[self.i_] = eval(fx, self.fy_).val;
+                // values_[self.i_] = eval(fx, self.fy_).val;
                 //std.log.info("{} {} {}", .{fx, self.fy_, eval(fx, self.fy_).val}); 
                 
-                // const r1 = eval(fx + alias_dx, self.fy_ + alias_dy);
-                // const r2 = eval(fx + alias_dx, self.fy_ - alias_dy);
-                // const r3 = eval(fx - alias_dx, self.fy_ + alias_dy);
-                // const r4 = eval(fx - alias_dx, self.fy_ - alias_dy);
-                // response.val = r1.val + r2.val + r3.val + r4.val;
+                const r1 = eval(fx + alias_dx, self.fy_ + alias_dy);
+                const r2 = eval(fx + alias_dx, self.fy_ - alias_dy);
+                const r3 = eval(fx - alias_dx, self.fy_ + alias_dy);
+                const r4 = eval(fx - alias_dx, self.fy_ - alias_dy);
+                const val = r1.val + r2.val + r3.val + r4.val;
 
-                // values_[self.i_] = response.val;
+                values_[self.i_] = val;
                 x += 1;
                 self.i_ += 1;
             }
@@ -327,6 +327,7 @@ pub fn main() anyerror!void {
     };
 
     std.sort.heap(ValueIndex, ivalues, {}, compare.inner);
+    std.log.info("Smallest: {}, Largest: {}", .{ivalues[0].val, ivalues[ivalues.len-1].val});
     // for (ivalues) |iv| {
     //     std.log.info("{}", .{iv.val});
     // }
